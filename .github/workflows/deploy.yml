@@ -50,21 +50,24 @@ jobs:
       - name: Compress build
         run: |
           cd .next
-          tar -czf ../frontend-build.tar.gz *
+          tar -czf ../build.tar.gz *
           cd ..
 
       - name: Deploy and Extract
         run: |
           # Upload compressed file
-          scp -i ~/.ssh/deploy_key frontend-build.tar.gz heru@34.59.75.214:/tmp/
+          scp -i ~/.ssh/deploy_key build.tar.gz heru@34.59.75.214:/tmp/
 
           # SSH into server, extract files, and cleanup
           ssh -i ~/.ssh/deploy_key heru@34.59.75.214 "
-            # Extract frontend
-            cd /var/www/html/my-land/frontend
+            # Extract build
+            cd /var/www/html/my-land
             rm -rf .next/* # Clean old files
-            tar -xzf /tmp/frontend-build.tar.gz -C .next
+            tar -xzf /tmp/build.tar.gz -C .next
             
             # Cleanup temporary files
-            rm /tmp/frontend-build.tar.gz
+            rm /tmp/build.tar.gz
+
+            # Restart application using PM2
+            pm2 restart my-land || pm2 start npm --name 'my-land' -- start
           "
