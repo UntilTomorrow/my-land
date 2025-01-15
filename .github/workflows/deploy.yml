@@ -1,0 +1,70 @@
+name: Automatic Deploy - herucahyo
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20.x"
+
+      - name: Install PNPM
+        run: |
+          npm install -g pnpm@9.15.3  # Instal versi pnpm tertentu
+          pnpm -v  # Verifikasi instalasi pnpm
+
+      - name: Set npm registry
+        run: pnpm config set registry https://registry.yarnpkg.com/
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Build
+        run: |
+          pnpm install
+          pnpm build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 34.59.75.214 >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Compress build
+        run: |
+          cd .next
+          tar -czf ../frontend-build.tar.gz *
+          cd ..
+
+      - name: Deploy and Extract
+        run: |
+          # Upload compressed file
+          scp -i ~/.ssh/deploy_key frontend-build.tar.gz heru@34.59.75.214:/tmp/
+
+          # SSH into server, extract files, and cleanup
+          ssh -i ~/.ssh/deploy_key heru@34.59.75.214 "
+            # Extract frontend
+            cd /var/www/html/my-land/frontend
+            rm -rf .next/* # Clean old files
+            tar -xzf /tmp/frontend-build.tar.gz -C .next
+            
+            # Cleanup temporary files
+            rm /tmp/frontend-build.tar.gz
+          "
